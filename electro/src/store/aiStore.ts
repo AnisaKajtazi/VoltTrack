@@ -20,9 +20,11 @@ interface ScenarioMetrics extends EnergyMetrics {
 interface AIState {
   activeTab: IntelligenceTab
   aiActive: boolean
+  isOptimized: boolean
   optimizationApproved: boolean
   optimizationFactor: number
   optimizationResult: OptimizationResult | null
+  optimizationStatusMessage: string | null
   futureScenario: FutureScenario
   metrics: EnergyMetrics
   floors: ConsumptionRow[]
@@ -55,13 +57,20 @@ function buildScenarioMetrics(baseMetrics: EnergyMetrics, scenario: FutureScenar
 }
 
 const initialModel = buildModel(0)
+let optimizationAnimationFrame: number | null = null
+
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3)
+}
 
 export const useAIStore = create<AIState>((set, get) => ({
   activeTab: 'digitalTwin',
   aiActive: false,
+  isOptimized: false,
   optimizationApproved: false,
   optimizationFactor: 0,
   optimizationResult: null,
+  optimizationStatusMessage: null,
   futureScenario: 'normal',
   metrics: initialModel.metrics,
   floors: initialModel.floors,
@@ -81,21 +90,51 @@ export const useAIStore = create<AIState>((set, get) => ({
 
   approveOptimization: () => {
     const optimizationResult = runOptimization()
-    const model = buildModel(OPTIMIZATION_REDUCTION)
-    const { futureScenario } = get()
+    const { futureScenario, optimizationFactor } = get()
+    const startFactor = optimizationFactor
+    const durationMs = 1400
+    const startedAt = performance.now()
+
+    if (optimizationAnimationFrame !== null) {
+      cancelAnimationFrame(optimizationAnimationFrame)
+    }
 
     set({
+      isOptimized: true,
       optimizationApproved: true,
-      optimizationFactor: OPTIMIZATION_REDUCTION,
       optimizationResult,
-      metrics: model.metrics,
-      floors: model.floors,
-      rooms: model.rooms,
-      devices: model.devices,
-      anomalies: model.anomalies,
-      insight: model.insight,
-      scenarioMetrics: buildScenarioMetrics(model.metrics, futureScenario),
+      optimizationStatusMessage: 'Applying optimization plan...',
     })
+
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs)
+      const factor = startFactor + (OPTIMIZATION_REDUCTION - startFactor) * easeOutCubic(progress)
+      const model = buildModel(factor)
+
+      set({
+        optimizationFactor: factor,
+        metrics: model.metrics,
+        floors: model.floors,
+        rooms: model.rooms,
+        devices: model.devices,
+        anomalies: model.anomalies,
+        insight: model.insight,
+        scenarioMetrics: buildScenarioMetrics(model.metrics, futureScenario),
+      })
+
+      if (progress < 1) {
+        optimizationAnimationFrame = requestAnimationFrame(animate)
+        return
+      }
+
+      optimizationAnimationFrame = null
+      set({
+        optimizationFactor: OPTIMIZATION_REDUCTION,
+        optimizationStatusMessage: `Optimization complete. Energy consumption reduced by ${optimizationResult.savingsPercent}%.`,
+      })
+    }
+
+    optimizationAnimationFrame = requestAnimationFrame(animate)
   },
 
   setFutureScenario: (futureScenario) => {
@@ -110,10 +149,17 @@ export const useAIStore = create<AIState>((set, get) => ({
   resetOptimization: () => {
     const model = buildModel(0)
 
+    if (optimizationAnimationFrame !== null) {
+      cancelAnimationFrame(optimizationAnimationFrame)
+      optimizationAnimationFrame = null
+    }
+
     set({
+      isOptimized: false,
       optimizationApproved: false,
       optimizationFactor: 0,
       optimizationResult: null,
+      optimizationStatusMessage: null,
       metrics: model.metrics,
       floors: model.floors,
       rooms: model.rooms,

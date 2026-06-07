@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAIStore } from '../../store/aiStore'
+import { speak, stopSpeaking } from '../../utils/voice/speak'
 import { OptimizationModal } from './OptimizationModal'
 
 export function AIBrainPanel() {
   const insight = useAIStore((state) => state.insight)
   const anomalies = useAIStore((state) => state.anomalies)
   const optimizationApproved = useAIStore((state) => state.optimizationApproved)
+  const optimizationStatusMessage = useAIStore((state) => state.optimizationStatusMessage)
   const approveOptimization = useAIStore((state) => state.approveOptimization)
   const [modalOpen, setModalOpen] = useState(false)
 
-  const spokenText = useMemo(
+  const brainText = useMemo(
     () =>
       [
         insight.message,
@@ -20,6 +22,23 @@ export function AIBrainPanel() {
       ].join('\n'),
     [insight],
   )
+
+  const displayText = useMemo(
+    () => [brainText, optimizationStatusMessage].filter(Boolean).join('\n\n'),
+    [brainText, optimizationStatusMessage],
+  )
+
+  useEffect(() => {
+    speak(brainText)
+
+    return () => stopSpeaking()
+  }, [brainText])
+
+  useEffect(() => {
+    if (optimizationStatusMessage) {
+      speak(optimizationStatusMessage)
+    }
+  }, [optimizationStatusMessage])
 
   function handleApprove() {
     approveOptimization()
@@ -46,7 +65,7 @@ export function AIBrainPanel() {
               </div>
             </div>
 
-            <TypewriterText key={spokenText} text={spokenText} />
+            <TypewriterText key={displayText} text={displayText} />
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button

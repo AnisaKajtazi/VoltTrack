@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Scene } from '../scene/Scene'
@@ -13,6 +13,8 @@ import { useAIStore, type IntelligenceTab } from '../../store/aiStore'
 import { DashboardTab } from '../tabs/DashboardTab'
 import { AIBrainTab } from '../tabs/AIBrainTab'
 import { FutureModeTab } from '../tabs/FutureModeTab'
+import { CityPanel } from '../ui/CityPanel'
+import { cityBuildings } from '../../data/cityData'
 
 function LoadingFallback() {
   return (
@@ -24,11 +26,18 @@ function LoadingFallback() {
 }
 
 export function AppLayout() {
+  const [portfolioView, setPortfolioView] = useState<'building' | 'city'>('building')
+  const [selectedCityBuildingId, setSelectedCityBuildingId] = useState('volttrack-hq')
   const activeTab = useAIStore((state) => state.activeTab)
   const aiActive = useAIStore((state) => state.aiActive)
   const optimizationApproved = useAIStore((state) => state.optimizationApproved)
   const setActiveTab = useAIStore((state) => state.setActiveTab)
   const showDigitalTwin = activeTab === 'digitalTwin'
+  const showCityMode = showDigitalTwin && portfolioView === 'city'
+  const selectedCityBuilding = useMemo(
+    () => cityBuildings.find((building) => building.id === selectedCityBuildingId) ?? cityBuildings[0],
+    [selectedCityBuildingId],
+  )
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -42,7 +51,11 @@ export function AppLayout() {
         className="absolute inset-0"
       >
         <Suspense fallback={<LoadingFallback />}>
-          <Scene />
+          <Scene
+            cityMode={showCityMode}
+            selectedCityBuildingId={selectedCityBuilding.id}
+            onSelectCityBuilding={setSelectedCityBuildingId}
+          />
         </Suspense>
       </Canvas>
 
@@ -59,8 +72,8 @@ export function AppLayout() {
         >
           <div>
             <h1 className="text-xl font-bold tracking-tight">
-              <span className="text-sky-400">Shadow</span>
-              <span className="text-white">Grid</span>
+              <span className="text-sky-400">Volt</span>
+              <span className="text-white">Track</span>
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mt-0.5">
               Digital Twin - {buildingData.name}
@@ -71,14 +84,25 @@ export function AppLayout() {
             <IntelligenceTabs activeTab={activeTab} onSelect={setActiveTab} />
             {showDigitalTwin && (
               <div className="flex items-center gap-4">
-                <BuildingOverview />
-                <ModeToggle />
+                <PortfolioViewToggle view={portfolioView} onSelect={setPortfolioView} />
+                {portfolioView === 'building' && (
+                  <>
+                    <BuildingOverview />
+                    <ModeToggle />
+                  </>
+                )}
               </div>
             )}
           </div>
         </motion.header>
 
-        {showDigitalTwin && <DigitalTwinOverlay />}
+        {showDigitalTwin && (
+          portfolioView === 'city' ? (
+            <CityOverlay selectedBuilding={selectedCityBuilding} onSelectBuilding={setSelectedCityBuildingId} />
+          ) : (
+            <DigitalTwinOverlay />
+          )
+        )}
 
         <AnimatePresence mode="wait">
           {!showDigitalTwin && (
@@ -133,7 +157,7 @@ function DigitalTwinOverlay() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
-        className="absolute bottom-6 right-6 pointer-events-none"
+        className="absolute bottom-24 left-6 pointer-events-none"
       >
         <div className="glass-panel rounded-xl px-4 py-3 text-xs space-y-1.5">
           <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-2">Energy Flow</p>
@@ -172,6 +196,51 @@ const tabs: Array<{ id: IntelligenceTab; label: string }> = [
   { id: 'brain', label: 'AI Building Brain' },
   { id: 'future', label: 'Predictions & Future Mode' },
 ]
+
+function PortfolioViewToggle({ view, onSelect }: { view: 'building' | 'city'; onSelect: (view: 'building' | 'city') => void }) {
+  return (
+    <div className="glass-panel rounded-xl p-1 flex">
+      {[
+        { id: 'building' as const, label: 'Building View' },
+        { id: 'city' as const, label: 'City Mode' },
+      ].map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onSelect(option.id)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+            view === option.id
+              ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CityOverlay({
+  selectedBuilding,
+  onSelectBuilding,
+}: {
+  selectedBuilding: (typeof cityBuildings)[number]
+  onSelectBuilding: (buildingId: string) => void
+}) {
+  return (
+    <>
+      <div className="pointer-events-auto px-6 mt-1">
+        <div className="glass-panel inline-flex items-center gap-3 rounded-xl px-4 py-2 text-xs text-slate-400">
+          <span className="text-sky-300">City Mode</span>
+          <span className="h-1 w-1 rounded-full bg-slate-600" />
+          <span>Click a building to compare portfolio costs</span>
+        </div>
+      </div>
+      <CityPanel selectedBuilding={selectedBuilding} onSelectBuilding={onSelectBuilding} />
+    </>
+  )
+}
 
 function IntelligenceTabs({ activeTab, onSelect }: { activeTab: IntelligenceTab; onSelect: (tab: IntelligenceTab) => void }) {
   return (

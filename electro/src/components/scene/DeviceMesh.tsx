@@ -4,6 +4,8 @@ import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Device } from '../../types'
 import { useShadowGridStore } from '../../store/useShadowGridStore'
+import { useAIStore } from '../../store/aiStore'
+import { getEffectivePower } from '../../ai/energyAnalyzer'
 import { getPowerFlowColor, formatWatts } from '../../utils/energyUtils'
 
 interface DeviceMeshProps {
@@ -43,12 +45,14 @@ export function DeviceMesh({
   const floorMode = useShadowGridStore((s) => s.floorMode)
   const viewMode = useShadowGridStore((s) => s.viewMode)
   const crossSectionEnabled = useShadowGridStore((s) => s.crossSectionEnabled)
+  const optimizationFactor = useAIStore((s) => s.optimizationFactor)
 
   const isSelected = selectedDeviceId === device.id
   const isOn = device.status === 'on'
   const isEnergyDevice = device.type !== 'plant' && device.type !== 'switch'
+  const effectivePowerUsage = getEffectivePower(device, optimizationFactor)
   const color = TYPE_COLORS[device.type] ?? '#94a3b8'
-  const flowColor = getPowerFlowColor(device.powerUsage, isOn, device.health)
+  const flowColor = getPowerFlowColor(effectivePowerUsage, isOn, device.health)
   const showInRoom = selectedRoomId === roomId
 
   const localPos: [number, number, number] = [
@@ -63,7 +67,7 @@ export function DeviceMesh({
     }
     if (glowRef.current && isOn && isEnergyDevice) {
       glowRef.current.intensity =
-        0.25 + (device.powerUsage / 3000) * 0.7 + Math.sin(clock.elapsedTime * 4) * 0.12
+        0.25 + (effectivePowerUsage / 3000) * 0.7 + Math.sin(clock.elapsedTime * 4) * 0.12
     }
   })
 
@@ -73,7 +77,7 @@ export function DeviceMesh({
   if (!showDevice) return null
 
   const scale = getDeviceScale(device.type)
-  const glowScale = isOn && isEnergyDevice ? 0.25 + device.powerUsage / 5000 : 0
+  const glowScale = isOn && isEnergyDevice ? 0.25 + effectivePowerUsage / 5000 : 0
   const highlightActive = isSelected || hovered || (isRoomSelected && isOn && isEnergyDevice)
   const showLabel = hovered || isSelected || (isRoomSelected && isEnergyDevice)
 
@@ -101,7 +105,7 @@ export function DeviceMesh({
           color={isOn ? color : '#475569'}
           emissive={isOn ? (isEnergyDevice ? flowColor : color) : '#000000'}
           emissiveIntensity={
-            isOn ? (highlightActive ? 0.65 : 0.35) + device.powerUsage / 5000 : 0
+            isOn ? (highlightActive ? 0.65 : 0.35) + effectivePowerUsage / 5000 : 0
           }
           metalness={device.type === 'monitor' ? 0.8 : 0.55}
           roughness={device.type === 'plant' ? 0.9 : 0.35}
@@ -146,7 +150,7 @@ export function DeviceMesh({
                 className="text-[10px] font-mono mt-0.5"
                 style={{ color: isOn ? flowColor : '#64748b' }}
               >
-                {isOn ? formatWatts(device.powerUsage) : 'OFF'}
+                {isOn ? formatWatts(effectivePowerUsage) : 'OFF'}
               </p>
             )}
           </div>

@@ -5,8 +5,19 @@ import { CameraController } from './CameraController'
 import { CrossSectionManager } from './CrossSectionManager'
 import { SceneLighting } from './SceneLighting'
 import { GridConnection } from './GridConnection'
+import { CityScene } from './CityScene'
 
-export function Scene() {
+interface SceneProps {
+  cityMode?: boolean
+  selectedCityBuildingId: string
+  onSelectCityBuilding: (buildingId: string) => void
+}
+
+export function Scene({ cityMode = false, selectedCityBuildingId, onSelectCityBuilding }: SceneProps) {
+  if (cityMode) {
+    return <CityScene selectedBuildingId={selectedCityBuildingId} onSelectBuilding={onSelectCityBuilding} />
+  }
+
   return (
     <>
       <color attach="background" args={['#0a0e17']} />

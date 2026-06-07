@@ -4,6 +4,8 @@ import { Line, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { buildingData, BUILDING_CONSTANTS, getFloorPanelPosition } from '../../data/buildingData'
 import { useShadowGridStore } from '../../store/useShadowGridStore'
+import { useAIStore } from '../../store/aiStore'
+import { getEffectivePower } from '../../ai/energyAnalyzer'
 import { getPowerFlowColor } from '../../utils/energyUtils'
 
 interface EnergyPath {
@@ -105,6 +107,9 @@ function DirectionArrow({ path, dimmed }: { path: EnergyPath; dimmed: boolean })
 function EnergyLine({ path, dimmed }: { path: EnergyPath; dimmed: boolean }) {
   const points = useMemo(() => path.curve.getPoints(64), [path.curve])
   const opacityRef = useRef(path.isActive ? 0.45 : 0.08)
+  const lineWidth = path.level === 'grid' || path.level === 'panel'
+    ? Math.max(1.15, 1.2 + path.power / 5000)
+    : Math.max(0.65, 0.65 + path.power / 4500)
 
   useFrame(({ clock }) => {
     if (path.isActive && !dimmed) {
@@ -121,7 +126,7 @@ function EnergyLine({ path, dimmed }: { path: EnergyPath; dimmed: boolean }) {
       color={path.color}
       transparent
       opacity={path.isActive ? opacityRef.current : dimmed ? 0.04 : 0.08}
-      lineWidth={path.level === 'grid' || path.level === 'panel' ? 2 : 1}
+      lineWidth={lineWidth}
     />
   )
 }
@@ -159,11 +164,13 @@ export function EnergyFlow() {
   const selectedFloorId = useShadowGridStore((s) => s.selectedFloorId)
   const selectedDeviceId = useShadowGridStore((s) => s.selectedDeviceId)
   const navigationLevel = useShadowGridStore((s) => s.navigationLevel)
+  const optimizationFactor = useAIStore((s) => s.optimizationFactor)
 
   const paths = useMemo(() => {
     const result: EnergyPath[] = []
     const grid = new THREE.Vector3(...BUILDING_CONSTANTS.GRID_POSITION)
     const panel = new THREE.Vector3(...BUILDING_CONSTANTS.MAIN_PANEL_POSITION)
+    const visualPowerScale = 1 - optimizationFactor
 
     // Grid → Main Power Source
     result.push({
@@ -174,7 +181,7 @@ export function EnergyFlow() {
         new THREE.Vector3(0, 10, 2),
         panel,
       ]),
-      power: 5000,
+      power: 5000 * visualPowerScale,
       isActive: true,
       color: '#fbbf24',
       level: 'grid',
@@ -182,7 +189,11 @@ export function EnergyFlow() {
 
     for (const floor of buildingData.floors) {
       const floorPanel = new THREE.Vector3(...getFloorPanelPosition(floor.yOffset))
-      const floorPower = floor.energyConsumption * 200
+      const floorPower = floor.rooms.reduce(
+        (floorSum, room) =>
+          floorSum + room.devices.reduce((roomSum, device) => roomSum + getEffectivePower(device, optimizationFactor), 0),
+        0,
+      )
 
       // Main Panel → Floor Distribution Panel
       result.push({
@@ -211,7 +222,7 @@ export function EnergyFlow() {
 
         const roomPower = room.devices
           .filter((d) => d.status === 'on')
-          .reduce((s, d) => s + d.powerUsage, 0)
+          .reduce((s, d) => s + getEffectivePower(d, optimizationFactor), 0)
 
         const roomHealth = Math.min(...room.devices.map((d) => d.health))
 
@@ -254,10 +265,10 @@ export function EnergyFlow() {
               ),
               devicePos,
             ]),
-            power: device.powerUsage,
+            power: getEffectivePower(device, optimizationFactor),
             isActive: device.status === 'on',
             color: getPowerFlowColor(
-              device.powerUsage,
+              getEffectivePower(device, optimizationFactor),
               device.status === 'on',
               device.health,
             ),
@@ -269,7 +280,7 @@ export function EnergyFlow() {
     }
 
     return result
-  }, [])
+  }, [optimizationFactor])
 
   const focusActive =
     navigationLevel === 'room' ||

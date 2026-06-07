@@ -4,6 +4,7 @@ import { buildingData, BUILDING_CONSTANTS } from '../../data/buildingData'
 import { useShadowGridStore } from '../../store/useShadowGridStore'
 import { FloorMesh } from './FloorMesh'
 import { WindowMesh } from './WindowMesh'
+import { RooftopLogo } from './RooftopLogo'
 
 export function Building() {
   const viewMode = useShadowGridStore((s) => s.viewMode)
@@ -71,6 +72,7 @@ export function Building() {
               emissiveIntensity={0.15}
             />
           </mesh>
+          <RooftopLogo />
         </group>
       )}
 

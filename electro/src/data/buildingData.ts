@@ -339,7 +339,7 @@ const mechanicalRooms: Room[] = [
 
 export const buildingData: Building = {
   id: 'building-shadowgrid-hq',
-  name: 'ShadowGrid HQ',
+  name: 'VoltTrack HQ',
   width: BUILDING_WIDTH,
   depth: BUILDING_DEPTH,
   floors: [
